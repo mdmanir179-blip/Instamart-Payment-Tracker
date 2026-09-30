@@ -8,7 +8,9 @@ import {
   CreditCard, 
   Receipt, 
   ShieldCheck, 
-  Copy
+  Copy,
+  Calendar,
+  Clock
 } from 'lucide-react';
 
 interface InvoiceDetailModalProps {
@@ -61,8 +63,6 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
                 <span>{invoice.warehouseName}</span>
                 <span aria-hidden="true">·</span>
                 <span>{invoice.city || 'Metro Hub'}</span>
-                <span aria-hidden="true">·</span>
-                <span>Accounting Date: {invoice.invoiceAccountingDate}</span>
               </div>
             </div>
           </div>
@@ -78,6 +78,49 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
         {/* Modal Body */}
         <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto text-xs text-slate-700 dark:text-slate-300">
           
+          {/* Key Dates Highlights Ribbon */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60">
+            <div>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-sky-500" />
+                <span>Invoice Date</span>
+              </span>
+              <span className="font-bold text-slate-900 dark:text-white font-mono text-xs mt-0.5 block">
+                {invoice.invoiceAccountingDate || '—'}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-emerald-500" />
+                <span>GRN Date</span>
+              </span>
+              <span className="font-bold text-emerald-700 dark:text-emerald-400 font-mono text-xs mt-0.5 block">
+                {invoice.grnDate || '—'}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-purple-500" />
+                <span>Payment Date</span>
+              </span>
+              <span className="font-bold text-purple-700 dark:text-purple-300 font-mono text-xs mt-0.5 block">
+                {invoice.lastPaymentDate || (invoice.paymentAmount > 0 ? 'Recorded' : 'Unpaid')}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Clock className="w-3 h-3 text-amber-500" />
+                <span>Due Date</span>
+              </span>
+              <span className="font-bold text-slate-900 dark:text-white font-mono text-xs mt-0.5 block">
+                {invoice.dueDate || '—'}
+              </span>
+            </div>
+          </div>
+
           {/* Key Amount Summary Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-lg">
@@ -125,7 +168,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">PO Date</span>
-                <span className="text-slate-900 dark:text-slate-200">{invoice.poDate || '—'}</span>
+                <span className="text-slate-900 dark:text-slate-200 font-semibold">{invoice.poDate || '—'}</span>
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">PO Amount</span>
@@ -137,7 +180,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">GRN Date</span>
-                <span className="text-slate-900 dark:text-slate-200">{invoice.grnDate || '—'}</span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-bold">{invoice.grnDate || '—'}</span>
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">Gross GRN Amount</span>
@@ -195,7 +238,7 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">Last Payment Date</span>
-                <span className="text-slate-900 dark:text-slate-200">{invoice.lastPaymentDate || '—'}</span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-bold">{invoice.lastPaymentDate || '—'}</span>
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">Due Date (Credit Period)</span>

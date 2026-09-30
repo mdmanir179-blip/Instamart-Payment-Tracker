@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ViewTab, InvoiceRecord, PaymentRecord } from './types';
-import { INITIAL_INVOICES, INITIAL_PAYMENTS, deriveInitialPayments } from './data/initialData';
+import { deriveInitialPayments } from './data/initialData';
 import { calculateFinancialSummary } from './utils/summaryCalculator';
 import { Header } from './components/Header';
 import { MetricCards } from './components/MetricCards';
@@ -12,16 +12,23 @@ import { AgingAnalysisView } from './components/AgingAnalysisView';
 import { InvoiceDetailModal } from './components/InvoiceDetailModal';
 import { UploadModal } from './components/UploadModal';
 import { ExportModal } from './components/ExportModal';
+import { ClearDataModal } from './components/ClearDataModal';
 import { PrintStatement } from './components/PrintStatement';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { Upload, FileSpreadsheet, ShieldCheck, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
-  // Requirement 4: Demo data removed by default - starts with empty data
+  // 100% Clean: Pure state with zero demo data.
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => {
     try {
       const saved = localStorage.getItem('instamart_invoices');
       if (saved) {
+        // Automatically purge any previous benchmark demo data
+        if (saved.includes('TBC/26-27/831') || saved.includes('VIAPO74796') || saved.includes('1N96368405')) {
+          localStorage.removeItem('instamart_invoices');
+          localStorage.removeItem('instamart_payments');
+          return [];
+        }
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
@@ -35,6 +42,10 @@ export default function App() {
     try {
       const saved = localStorage.getItem('instamart_payments');
       if (saved) {
+        if (saved.includes('1N96368405') || saved.includes('HSBCN52026')) {
+          localStorage.removeItem('instamart_payments');
+          return [];
+        }
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
@@ -44,7 +55,7 @@ export default function App() {
     return [];
   });
 
-  // Requirement 2: Screen color light and dark mode
+  // Theme support
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
       const savedTheme = localStorage.getItem('instamart_theme');
@@ -104,6 +115,7 @@ export default function App() {
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isClearDataOpen, setIsClearDataOpen] = useState(false);
 
   // Financial summary computation
   const summary = useMemo(() => {
@@ -134,26 +146,19 @@ export default function App() {
     }
   };
 
-  // Clear all data
-  const handleClearData = () => {
-    if (window.confirm('Are you sure you want to clear current invoices and payments?')) {
-      setInvoices([]);
-      setPayments([]);
-      setSelectedWarehouse(undefined);
-      try {
-        localStorage.removeItem('instamart_invoices');
-        localStorage.removeItem('instamart_payments');
-      } catch {
-        // ignore
-      }
-    }
-  };
-
-  // Optional: Load sample benchmark data if user specifically requests it
-  const handleLoadSampleData = () => {
-    setInvoices(INITIAL_INVOICES);
-    setPayments(INITIAL_PAYMENTS);
+  // Clear all data directly from in-app modal
+  const handleConfirmClear = () => {
+    setInvoices([]);
+    setPayments([]);
     setSelectedWarehouse(undefined);
+    setSelectedInvoice(null);
+    setCurrentTab('dashboard');
+    try {
+      localStorage.removeItem('instamart_invoices');
+      localStorage.removeItem('instamart_payments');
+    } catch {
+      // ignore
+    }
   };
 
   // Filter actions from KPI cards
@@ -194,9 +199,10 @@ export default function App() {
         onTabChange={setCurrentTab}
         onOpenUpload={() => setIsUploadOpen(true)}
         onOpenExport={() => setIsExportOpen(true)}
-        onClearData={handleClearData}
+        onClearData={() => setIsClearDataOpen(true)}
         vendorName={vendorName}
         totalInvoices={invoices.length}
+        totalPayments={payments.length}
         theme={theme}
         onToggleTheme={toggleTheme}
       />
@@ -215,23 +221,16 @@ export default function App() {
               Welcome to Instamart Payment Tracker
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto mb-6">
-              Upload your Excel (.xlsx, .xls) or CSV Invoice & Payment reports to track total sales, overdue balances, net payable amounts, and bank UTR settlements.
+              Upload your official Instamart Excel (.xlsx, .xls) or CSV Invoice and Payment reports to begin tracking sales, overdue invoices, and bank settlements.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <div className="flex items-center justify-center">
               <button
                 onClick={() => setIsUploadOpen(true)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl text-xs sm:text-sm shadow-md transition-colors"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl text-sm shadow-md transition-colors"
               >
                 <Upload className="w-4 h-4" />
                 <span>Upload Excel / CSV Report</span>
-              </button>
-
-              <button
-                onClick={handleLoadSampleData}
-                className="w-full sm:w-auto px-4 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-xl text-xs sm:text-sm border border-slate-200 dark:border-slate-700 transition-colors"
-              >
-                Load Benchmark 37 Invoices (Sample)
               </button>
             </div>
 
@@ -390,7 +389,6 @@ export default function App() {
         onClose={() => setIsUploadOpen(false)}
         onInvoicesLoaded={handleInvoicesLoaded}
         onPaymentsLoaded={handlePaymentsLoaded}
-        onLoadSample={handleLoadSampleData}
       />
 
       {/* Export Reports Modal */}
@@ -407,6 +405,15 @@ export default function App() {
         invoices={invoices}
         payments={payments}
         summary={summary}
+      />
+
+      {/* Clear Dataset In-App Confirmation Modal */}
+      <ClearDataModal
+        isOpen={isClearDataOpen}
+        onClose={() => setIsClearDataOpen(false)}
+        onConfirm={handleConfirmClear}
+        totalInvoices={invoices.length}
+        totalPayments={payments.length}
       />
 
       {/* Offline Connectivity Notification */}

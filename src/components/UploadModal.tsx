@@ -8,15 +8,13 @@ interface UploadModalProps {
   onClose: () => void;
   onInvoicesLoaded: (invoices: InvoiceRecord[], mode: 'replace' | 'append') => void;
   onPaymentsLoaded: (payments: PaymentRecord[], mode: 'replace' | 'append') => void;
-  onLoadSample: () => void;
 }
 
 export const UploadModal: React.FC<UploadModalProps> = ({
   isOpen,
   onClose,
   onInvoicesLoaded,
-  onPaymentsLoaded,
-  onLoadSample
+  onPaymentsLoaded
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -75,7 +73,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const handleConfirmApply = () => {
     if (!parseResult) return;
 
-    if (parseResult.fileType === 'payment_report' && parseResult.payments) {
+    if (parseResult.payments) {
       onPaymentsLoaded(parseResult.payments, uploadMode);
       setUploadSuccessMsg(`Successfully loaded ${parseResult.payments.length} payment records!`);
     } else if (parseResult.invoices) {
@@ -165,33 +163,37 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
           {/* Parse Result Summary */}
           {parseResult && !isProcessing && (
-            <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-amber-500 dark:text-amber-400" />
-                  <span className="font-semibold text-slate-900 dark:text-white">{parseResult.fileName}</span>
-                </div>
-                <span className="text-[11px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-amber-800 dark:text-amber-300 font-mono">
-                  {parseResult.fileType === 'payment_report' ? 'Point 2 Payment Report' : 'Point 1 Invoice Report'}
-                </span>
-              </div>
-
+            <div className="space-y-3">
               {parseResult.errors.length > 0 ? (
-                <div className="text-red-600 dark:text-red-400 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{parseResult.errors.join(', ')}</span>
+                <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg text-red-800 dark:text-red-300 space-y-1">
+                  <div className="flex items-center gap-1.5 font-semibold">
+                    <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+                    <span>Upload Issue</span>
+                  </div>
+                  {parseResult.errors.map((e, idx) => (
+                    <div key={idx} className="text-[11px]">{e}</div>
+                  ))}
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <div className="text-slate-700 dark:text-slate-300 flex items-center justify-between text-xs">
-                    <span>Parsed Records:</span>
-                    <strong className="text-slate-900 dark:text-white font-mono">{parseResult.totalRows} rows ready</strong>
+                <div className="p-3 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-lg space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-amber-500" />
+                      <span className="font-semibold text-slate-900 dark:text-slate-200">{parseResult.fileName}</span>
+                    </div>
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 font-medium">
+                      {parseResult.fileType === 'payment_report' ? 'Payment Report (Point 2)' : 'Invoice Report (Point 1)'}
+                    </span>
                   </div>
 
-                  {/* Mode Selector */}
+                  <div className="text-[11px] text-slate-500">
+                    Detected <strong className="text-slate-800 dark:text-slate-200">{parseResult.totalRows}</strong> valid records ready to import.
+                  </div>
+
+                  {/* Mode Selection */}
                   <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                    <span className="text-slate-500 dark:text-slate-400">Import Mode:</span>
-                    <div className="flex items-center gap-2">
+                    <span className="text-slate-600 dark:text-slate-400">Import Mode:</span>
+                    <div className="flex items-center gap-3">
                       <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300">
                         <input
                           type="radio"
@@ -218,23 +220,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               )}
             </div>
           )}
-
-          {/* Optional Sample Data Loader for Testing */}
-          <div className="p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800/80 rounded-lg flex items-center justify-between">
-            <div>
-              <div className="font-medium text-slate-800 dark:text-slate-300">Load Benchmark Sample Dataset</div>
-              <div className="text-[11px] text-slate-500">Optional: preview software with 37 Instamart test invoices</div>
-            </div>
-            <button
-              onClick={() => {
-                onLoadSample();
-                onClose();
-              }}
-              className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-md font-medium transition-colors whitespace-nowrap"
-            >
-              Load Sample
-            </button>
-          </div>
 
         </div>
 

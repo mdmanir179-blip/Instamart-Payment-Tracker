@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import { InvoiceRecord, PaymentRecord } from '../types';
 import { parseINR } from './currency';
-import { parseCsvLine } from '../data/initialData';
+import { parseAndFormatDate, extractDateFromGrnNo } from './dateFormatter';
 
 export type DetectedFileType = 'invoice_report' | 'payment_report' | 'unknown';
 
@@ -30,7 +30,7 @@ function normalizeHeader(header: string): string {
 export function detectReportType(headers: string[]): DetectedFileType {
   const normHeaders = headers.map(normalizeHeader);
 
-  const invoiceKeywords = ['invoicesrecorded', 'grossgrnamount', 'pono', 'grnno', 'invoicenumber', 'netpayableamount', 'outstandingpayment'];
+  const invoiceKeywords = ['invoicesrecorded', 'grossgrnamount', 'pono', 'grnno', 'invoicenumber', 'netpayableamount', 'outstandingpayment', 'grndate', 'invoiceaccountingdate'];
   const paymentKeywords = ['paymentnumber', 'tradevendortype', 'paymenttype', 'reversal', 'netamount'];
 
   const invoiceMatches = invoiceKeywords.filter(k => normHeaders.some(h => h.includes(k))).length;
@@ -54,68 +54,91 @@ export function mapRowsToInvoices(rawRows: Record<string, any>[]): InvoiceRecord
     const getVal = (...keys: string[]): any => {
       for (const k of keys) {
         const direct = row[k];
-        if (direct !== undefined && direct !== null) return direct;
+        if (direct !== undefined && direct !== null && direct !== '') return direct;
         
-        // try case-insensitive / normalized lookup
+        // try normalized lookup
         const normKey = normalizeHeader(k);
         for (const [rKey, rVal] of Object.entries(row)) {
           if (normalizeHeader(rKey) === normKey) {
-            return rVal;
+            if (rVal !== undefined && rVal !== null && rVal !== '') return rVal;
           }
         }
       }
       return '';
     };
 
-    const orgName = String(getVal('Organization Name', 'Organization', 'Company') || 'SCOOTSY LOGISTICS PRIVATE LIMITED');
-    const vendorName = String(getVal('Vendor Name', 'Vendor') || 'The Brothers and Co');
-    const vendorCode = String(getVal('Vendor Code') || '1N96368405');
-    const gstin = String(getVal('GSTIN', 'GST') || '');
-    const pan = String(getVal('PAN') || '');
-    const warehouseName = String(getVal('Warehouse Name', 'Warehouse', 'DC') || 'General Warehouse');
+    const orgName = String(getVal('Organization Name', 'Organization', 'Company', 'Org') || 'SCOOTSY LOGISTICS PRIVATE LIMITED');
+    const vendorName = String(getVal('Vendor Name', 'Vendor', 'Supplier Name') || 'The Brothers and Co');
+    const vendorCode = String(getVal('Vendor Code', 'Supplier Code', 'Vendor ID') || '1N96368405');
+    const gstin = String(getVal('GSTIN', 'GST', 'Tax ID') || '');
+    const pan = String(getVal('PAN', 'PAN Number') || '');
+    const warehouseName = String(getVal('Warehouse Name', 'Warehouse', 'DC', 'Location') || 'General Warehouse');
     const city = String(getVal('City') || '');
     const state = String(getVal('State') || '');
     const statusOfInvoice = String(getVal('Status of Invoice', 'Status') || 'Posted');
-    const poNumber = String(getVal('PO No.', 'PO No', 'Purchase Order No') || '');
-    const poDate = String(getVal('PO Date') || '');
-    const poAmount = parseINR(getVal('PO Amount'));
-    const grnNumber = String(getVal('GRN No.', 'GRN No', 'GRN Number') || '');
-    const grnDate = String(getVal('GRN Date') || '');
-    const grossGrnAmount = parseINR(getVal('Gross GRN Amount', 'Gross GRN'));
-    const invoiceNumber = String(getVal('Invoice Number', 'Invoice No', 'Bill No') || `INV-${idx + 1}`);
-    const invoiceAccountingDate = String(getVal('Invoice Accounting Date', 'Invoice Date') || '');
+    const poNumber = String(getVal('PO No.', 'PO No', 'PO Number', 'Purchase Order No') || '');
+    
+    // 1. PO Date
+    const poDate = parseAndFormatDate(getVal('PO Date', 'PODate', 'PO Dt', 'Order Date'));
+    const poAmount = parseINR(getVal('PO Amount', 'PO Value'));
+    
+    const grnNumber = String(getVal('GRN No.', 'GRN No', 'GRN Number', 'Receipt No') || '');
+    
+    // 2. GRN Date (with automatic fallback to extract from GRN number like ##10072026)
+    let grnDate = parseAndFormatDate(getVal('GRN Date', 'GRNDate', 'GRN Dt', 'Receipt Date', 'Goods Receipt Date'));
+    if (!grnDate && grnNumber) {
+      grnDate = extractDateFromGrnNo(grnNumber);
+    }
+
+    const grossGrnAmount = parseINR(getVal('Gross GRN Amount', 'Gross GRN', 'GRN Amount'));
+    const invoiceNumber = String(getVal('Invoice Number', 'Invoice No', 'Bill No', 'Inv No') || `INV-${idx + 1}`);
+    
+    // 3. Invoice Accounting Date
+    const invoiceAccountingDate = parseAndFormatDate(getVal(
+      'Invoice Accounting Date', 
+      'Invoice Date', 
+      'InvoiceDate', 
+      'Inv Date', 
+      'InvDate', 
+      'Accounting Date', 
+      'AccountingDate', 
+      'Bill Date', 
+      'Billing Date',
+      'Date'
+    ));
     
     // Invoices recorded (Sales amount)
-    let invoicesRecorded = parseINR(getVal('Invoices recorded', 'Invoice Amount', 'Gross Amount'));
+    let invoicesRecorded = parseINR(getVal('Invoices recorded', 'Invoice Amount', 'Gross Amount', 'Gross Invoiced'));
     if (!invoicesRecorded && grossGrnAmount) {
       invoicesRecorded = grossGrnAmount;
     }
 
-    const tdsTcs = parseINR(getVal('TDS/TCS', 'TDS', 'TCS'));
-    const purchaseReturnAmount = parseINR(getVal('Purchase Return Amount', 'Purchase Return'));
-    const brandDiscountPromoClaims = parseINR(getVal('Brand discount (Promo Claims)', 'Brand discount', 'Promo Claims'));
-    const otherDebitAmount = parseINR(getVal('Other Debit Amount', 'Debit Note'));
+    const tdsTcs = parseINR(getVal('TDS/TCS', 'TDS', 'TCS', 'TDS Amount'));
+    const purchaseReturnAmount = parseINR(getVal('Purchase Return Amount', 'Purchase Return', 'Returns'));
+    const brandDiscountPromoClaims = parseINR(getVal('Brand discount (Promo Claims)', 'Brand discount', 'Promo Claims', 'Promo Discount'));
+    const otherDebitAmount = parseINR(getVal('Other Debit Amount', 'Debit Note', 'Other Debits'));
     const otherAdjustments = parseINR(getVal('Other adjustments *', 'Other adjustments', 'Adjustments'));
     
-    let netPayableAmount = parseINR(getVal('Net Payable Amount', 'Net Payable'));
+    let netPayableAmount = parseINR(getVal('Net Payable Amount', 'Net Payable', 'Net Amount'));
     if (!netPayableAmount && invoicesRecorded) {
       netPayableAmount = invoicesRecorded - (tdsTcs + purchaseReturnAmount + brandDiscountPromoClaims + otherDebitAmount + otherAdjustments);
     }
 
-    const otherAdjustmentDate = String(getVal('Other Adjustment Date') || '');
-    const invoiceStatus = String(getVal('Invoice Status') || 'Reconciled');
-    const paymentAmount = parseINR(getVal('Payment amount', 'Paid Amount', 'Payment'));
-    const paymentReferenceNo = String(getVal('Payment Reference No', 'Payment Reference', 'UTR', 'Bank Ref') || '');
+    const otherAdjustmentDate = parseAndFormatDate(getVal('Other Adjustment Date', 'Adjustment Date'));
+    const invoiceStatus = String(getVal('Invoice Status', 'Reconciliation Status') || 'Reconciled');
+    const paymentAmount = parseINR(getVal('Payment amount', 'Paid Amount', 'Payment', 'Received Amount'));
+    const paymentReferenceNo = String(getVal('Payment Reference No', 'Payment Reference', 'UTR', 'Bank Ref', 'UTR No', 'UTR Number') || '');
     
-    let outstandingPayment = parseINR(getVal('Outstanding payment', 'Outstanding', 'Balance'));
+    let outstandingPayment = parseINR(getVal('Outstanding payment', 'Outstanding', 'Balance', 'Pending Amount'));
     if (outstandingPayment === 0 && paymentAmount < netPayableAmount && !row['Outstanding payment']) {
       outstandingPayment = Math.max(0, netPayableAmount - paymentAmount);
     }
 
-    const dueDate = String(getVal('Due Date') || '');
-    const creditPeriod = parseInt(String(getVal('Credit Period', 'Payment Terms') || '30'), 10) || 30;
+    // 4. Due Date
+    const dueDate = parseAndFormatDate(getVal('Due Date', 'DueDate', 'Payment Due Date', 'Due Dt'));
+    const creditPeriod = parseInt(String(getVal('Credit Period', 'Payment Terms', 'Credit Days') || '30'), 10) || 30;
     
-    let overdueStatus = String(getVal('Overdue') || 'Not Due');
+    let overdueStatus = String(getVal('Overdue', 'Overdue Status') || 'Not Due');
     if (!overdueStatus || overdueStatus === '') {
       overdueStatus = outstandingPayment > 0 ? 'Overdue' : 'No due';
     }
@@ -131,7 +154,18 @@ export function mapRowsToInvoices(rawRows: Record<string, any>[]): InvoiceRecord
       }
     }
 
-    const lastPaymentDate = String(getVal('Last Payment Date', 'Payment Date') || '');
+    // 5. Last Payment Date
+    const lastPaymentDate = parseAndFormatDate(getVal(
+      'Last Payment Date', 
+      'Payment Date', 
+      'LastPaymentDate', 
+      'PaymentDate', 
+      'Paid Date', 
+      'PaidDate', 
+      'Disbursed Date', 
+      'Settlement Date', 
+      'Value Date'
+    ));
 
     const totalDeductions = tdsTcs + purchaseReturnAmount + brandDiscountPromoClaims + otherDebitAmount + otherAdjustments;
 
@@ -184,25 +218,37 @@ export function mapRowsToPayments(rawRows: Record<string, any>[]): PaymentRecord
   return rawRows.map((row, idx) => {
     const getVal = (...keys: string[]): any => {
       for (const k of keys) {
-        if (row[k] !== undefined && row[k] !== null) return row[k];
+        if (row[k] !== undefined && row[k] !== null && row[k] !== '') return row[k];
         const normKey = normalizeHeader(k);
         for (const [rKey, rVal] of Object.entries(row)) {
-          if (normalizeHeader(rKey) === normKey) return rVal;
+          if (normalizeHeader(rKey) === normKey) {
+            if (rVal !== undefined && rVal !== null && rVal !== '') return rVal;
+          }
         }
       }
       return '';
     };
 
-    const orgName = String(getVal('Organization Name') || 'SCOOTSY LOGISTICS PRIVATE LIMITED');
-    const vendorName = String(getVal('Vendor Name') || 'The Brothers and Co');
+    const orgName = String(getVal('Organization Name', 'Organization') || 'SCOOTSY LOGISTICS PRIVATE LIMITED');
+    const vendorName = String(getVal('Vendor Name', 'Vendor') || 'The Brothers and Co');
     const vendorCode = String(getVal('Vendor Code') || '1N96368405');
     const gstin = String(getVal('GSTIN') || '');
     const pan = String(getVal('PAN') || '');
     const tradeVendorType = String(getVal('Trade Vendor Type') || 'Inventory / FMCG');
     const paymentType = String(getVal('Payment type', 'Payment Type') || 'NEFT');
-    const paymentDate = String(getVal('Payment Date') || '');
-    const paymentNumber = String(getVal('Payment Number', 'Payment No') || `PAY-${idx + 1}`);
-    const paymentReferenceNo = String(getVal('Payment reference no.', 'Payment Reference No', 'UTR') || '');
+    
+    // Payment Date
+    const paymentDate = parseAndFormatDate(getVal(
+      'Payment Date', 
+      'PaymentDate', 
+      'Paid Date', 
+      'Value Date', 
+      'Transaction Date', 
+      'Date'
+    ));
+    
+    const paymentNumber = String(getVal('Payment Number', 'Payment No', 'Pmt No') || `PAY-${idx + 1}`);
+    const paymentReferenceNo = String(getVal('Payment reference no.', 'Payment Reference No', 'UTR', 'UTR No', 'Bank Ref') || '');
     const amount = parseINR(getVal('Amount', 'Gross Amount'));
     const reversal = parseINR(getVal('Reversal'));
     const netAmount = parseINR(getVal('Net Amount')) || (amount - reversal);
@@ -232,11 +278,11 @@ export function mapRowsToPayments(rawRows: Record<string, any>[]): PaymentRecord
  */
 export async function parseUploadedFile(file: File): Promise<ParseResult> {
   const fileName = file.name;
-  const isCsv = fileName.toLowerCase().endsWith('.csv');
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    // Enable cellDates: true so Excel serial dates are converted to Date objects
+    const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
     const firstSheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[firstSheetName];
     

@@ -13,7 +13,7 @@ import {
   CheckCircle,
   HelpCircle,
   X,
-  Filter
+  Calendar
 } from 'lucide-react';
 
 interface InvoiceTableProps {
@@ -24,7 +24,17 @@ interface InvoiceTableProps {
   onOpenUpload?: () => void;
 }
 
-type SortField = 'invoiceAccountingDate' | 'invoiceNumber' | 'invoicesRecorded' | 'netPayableAmount' | 'paymentAmount' | 'outstandingPayment' | 'dueDate';
+type SortField = 
+  | 'invoiceAccountingDate' 
+  | 'grnDate' 
+  | 'lastPaymentDate' 
+  | 'dueDate' 
+  | 'invoiceNumber' 
+  | 'invoicesRecorded' 
+  | 'netPayableAmount' 
+  | 'paymentAmount' 
+  | 'outstandingPayment';
+
 type SortOrder = 'asc' | 'desc';
 
 export const InvoiceTable: React.FC<InvoiceTableProps> = ({
@@ -69,10 +79,10 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
           (inv.invoiceNumber && inv.invoiceNumber.toLowerCase().includes(q)) ||
           // Dates (Invoice date, due date, PO date, GRN date, Last payment date)
           (inv.invoiceAccountingDate && inv.invoiceAccountingDate.toLowerCase().includes(q)) ||
-          (inv.dueDate && inv.dueDate.toLowerCase().includes(q)) ||
-          (inv.poDate && inv.poDate.toLowerCase().includes(q)) ||
           (inv.grnDate && inv.grnDate.toLowerCase().includes(q)) ||
           (inv.lastPaymentDate && inv.lastPaymentDate.toLowerCase().includes(q)) ||
+          (inv.dueDate && inv.dueDate.toLowerCase().includes(q)) ||
+          (inv.poDate && inv.poDate.toLowerCase().includes(q)) ||
           // Warehouse Name & City
           (inv.warehouseName && inv.warehouseName.toLowerCase().includes(q)) ||
           (inv.city && inv.city.toLowerCase().includes(q)) ||
@@ -150,7 +160,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
       {/* Control Bar: Universal Search & Quick Filters */}
       <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/80">
         
-        {/* Requirement 1: Universal Search Bar */}
+        {/* Universal Search Bar */}
         <div className="relative flex-1 max-w-lg">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
@@ -276,19 +286,33 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                 </button>
               </th>
 
+              {/* 1. Explicitly labeled Invoice Date */}
               <th className="py-3 px-3 font-semibold whitespace-nowrap">
                 <button 
                   onClick={() => handleSort('invoiceAccountingDate')} 
                   className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white"
+                  title="Invoice Accounting Date"
                 >
-                  <span>Date</span>
+                  <Calendar className="w-3.5 h-3.5 text-sky-500" />
+                  <span>Invoice Date</span>
                   <ArrowUpDown className="w-3 h-3 text-slate-400" />
                 </button>
               </th>
 
               <th className="py-3 px-3 font-semibold whitespace-nowrap">Warehouse / City</th>
               <th className="py-3 px-3 font-semibold whitespace-nowrap">Vendor / Code</th>
-              <th className="py-3 px-3 font-semibold whitespace-nowrap">PO & GRN No</th>
+
+              {/* 2. Explicitly labeled GRN No & GRN Date */}
+              <th className="py-3 px-3 font-semibold whitespace-nowrap">
+                <button 
+                  onClick={() => handleSort('grnDate')} 
+                  className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white"
+                  title="Sort by GRN Date"
+                >
+                  <span>GRN No & GRN Date</span>
+                  <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                </button>
+              </th>
 
               {showAllColumns && (
                 <>
@@ -350,6 +374,19 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                 </button>
               </th>
 
+              {/* 3. Explicitly labeled Payment Date */}
+              <th className="py-3 px-3 font-semibold whitespace-nowrap">
+                <button 
+                  onClick={() => handleSort('lastPaymentDate')} 
+                  className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white"
+                  title="Last Payment / Remittance Date"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Payment Date</span>
+                  <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                </button>
+              </th>
+
               <th className="py-3 px-3 font-semibold whitespace-nowrap">Payment Status</th>
               <th className="py-3 px-3 font-semibold whitespace-nowrap">UTR / Payment Ref</th>
 
@@ -360,7 +397,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 font-mono text-slate-700 dark:text-slate-300">
             {paginatedInvoices.length === 0 ? (
               <tr>
-                <td colSpan={showAllColumns ? 16 : 13} className="py-12 text-center text-slate-500 font-sans">
+                <td colSpan={showAllColumns ? 17 : 14} className="py-12 text-center text-slate-500 font-sans">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <FileText className="w-8 h-8 text-slate-400 dark:text-slate-600" />
                     <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -401,9 +438,11 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                       </span>
                     </td>
 
-                    {/* Date */}
-                    <td className="py-2.5 px-3 whitespace-nowrap text-slate-600 dark:text-slate-400 tabular-nums">
-                      {inv.invoiceAccountingDate || '—'}
+                    {/* 1. Invoice Date Cell */}
+                    <td className="py-2.5 px-3 whitespace-nowrap tabular-nums">
+                      <div className="font-semibold text-slate-900 dark:text-slate-100">
+                        {inv.invoiceAccountingDate || '—'}
+                      </div>
                     </td>
 
                     {/* Warehouse */}
@@ -418,11 +457,17 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                       <div className="text-[10px] text-slate-500 font-mono">{inv.vendorCode}</div>
                     </td>
 
-                    {/* PO & GRN */}
-                    <td className="py-2.5 px-3 whitespace-nowrap font-mono text-[11px] text-slate-600 dark:text-slate-400">
-                      <div>PO: {inv.poNumber || 'N/A'}</div>
-                      <div className="text-slate-500 truncate max-w-[120px]" title={inv.grnNumber}>
-                        GRN: {inv.grnNumber ? inv.grnNumber.split('##')[0] : 'N/A'}
+                    {/* 2. GRN No & GRN Date Cell */}
+                    <td className="py-2.5 px-3 whitespace-nowrap font-mono text-[11px]">
+                      <div className="text-slate-800 dark:text-slate-200 truncate max-w-[130px]" title={inv.grnNumber}>
+                        {inv.grnNumber ? inv.grnNumber.split('##')[0] : '—'}
+                      </div>
+                      <div className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                        <span className="text-slate-400 dark:text-slate-500 font-sans font-normal text-[10px]">GRN Dt:</span>
+                        <span>{inv.grnDate || '—'}</span>
+                      </div>
+                      <div className="text-slate-500 text-[10px] font-sans">
+                        PO: {inv.poNumber || '—'} {inv.poDate ? `(${inv.poDate})` : ''}
                       </div>
                     </td>
 
@@ -478,7 +523,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                       )}
                     </td>
 
-                    {/* Due Date & Overdue flag */}
+                    {/* Due Date */}
                     <td className="py-2.5 px-3 whitespace-nowrap">
                       <div className="text-slate-700 dark:text-slate-300 tabular-nums">{inv.dueDate || '—'}</div>
                       <div className="text-[10px]">
@@ -490,6 +535,23 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                           <span className="text-sky-600 dark:text-sky-400">Not Due</span>
                         )}
                       </div>
+                    </td>
+
+                    {/* 3. Payment Date Cell */}
+                    <td className="py-2.5 px-3 whitespace-nowrap tabular-nums">
+                      {inv.lastPaymentDate ? (
+                        <div>
+                          <span className="text-emerald-700 dark:text-emerald-400 font-bold">{inv.lastPaymentDate}</span>
+                          <div className="text-[10px] text-slate-500 font-sans">Bank Remitted</div>
+                        </div>
+                      ) : inv.paymentAmount > 0 ? (
+                        <div>
+                          <span className="text-amber-600 dark:text-amber-400 font-medium">Partially Settled</span>
+                          <div className="text-[10px] text-slate-400 font-sans">Date in UTR</div>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 dark:text-slate-600">—</span>
+                      )}
                     </td>
 
                     {/* Payment Status Label (Zero-Pill Discipline) */}

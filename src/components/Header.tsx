@@ -22,6 +22,7 @@ interface HeaderProps {
   onClearData: () => void;
   vendorName: string;
   totalInvoices: number;
+  totalPayments?: number;
   theme: 'light' | 'dark';
   onToggleTheme: () => void;
 }
@@ -34,6 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
   onClearData,
   vendorName,
   totalInvoices,
+  totalPayments = 0,
   theme,
   onToggleTheme
 }) => {
@@ -144,11 +146,12 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {/* Clear Data button if data exists */}
-            {totalInvoices > 0 && (
+            {(totalInvoices > 0 || totalPayments > 0) && (
               <button
                 onClick={onClearData}
                 title="Clear current dataset"
                 className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
+                aria-label="Clear current dataset"
               >
                 <Trash2 className="w-4 h-4" />
               </button>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { InvoiceRecord, PaymentRecord, FinancialSummary } from '../types';
 import { 
   exportInvoicesToExcel, 
@@ -6,8 +6,9 @@ import {
   exportOverdueRecoveryReport,
   exportToCsv 
 } from '../utils/exporter';
+import { generateInvoiceReportPDF, generatePaymentLedgerPDF } from '../utils/pdfGenerator';
 import { formatINR } from '../utils/currency';
-import { Download, X, FileSpreadsheet, Printer, ShieldAlert, FileCheck } from 'lucide-react';
+import { Download, X, FileSpreadsheet, Printer, ShieldAlert, FileCheck, FileText, CheckCircle2 } from 'lucide-react';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -24,7 +25,29 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   payments,
   summary
 }) => {
+  const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
+
   if (!isOpen) return null;
+
+  const handleDownloadPDF = () => {
+    try {
+      generateInvoiceReportPDF(invoices, summary, 'Instamart_Vendor_Statement.pdf');
+      setDownloadSuccess('PDF Report downloaded successfully!');
+      setTimeout(() => setDownloadSuccess(null), 3000);
+    } catch (e: any) {
+      alert('PDF generation error: ' + (e?.message || 'Failed to build PDF'));
+    }
+  };
+
+  const handleDownloadPaymentPDF = () => {
+    try {
+      generatePaymentLedgerPDF(payments, 'Instamart_Payment_Remittance_Ledger.pdf');
+      setDownloadSuccess('Payment Ledger PDF downloaded successfully!');
+      setTimeout(() => setDownloadSuccess(null), 3000);
+    } catch (e: any) {
+      alert('PDF generation error: ' + (e?.message || 'Failed to build PDF'));
+    }
+  };
 
   const handlePrint = () => {
     window.print();
@@ -73,13 +96,46 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           </button>
         </div>
 
+        {/* Success Alert */}
+        {downloadSuccess && (
+          <div className="mx-6 mt-4 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>{downloadSuccess}</span>
+          </div>
+        )}
+
         {/* Export Options Grid */}
         <div className="p-6 space-y-3.5 text-xs text-slate-700 dark:text-slate-300">
           <p className="text-slate-500 dark:text-slate-400 mb-2">
-            Select the report format to download. All reports include exact Indian Rupee (INR - ₹) figures.
+            Select the report format to download. Direct PDF downloads are fully functional and work on both mobile and computer.
           </p>
 
-          {/* Option 1: Full 34-Field Master Invoice Excel */}
+          {/* Option 1: Direct PDF Download (Solves Problem 1) */}
+          <div className="p-3.5 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700/60 rounded-lg flex items-center justify-between hover:border-amber-400 transition-colors shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 rounded-lg">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>Official PDF Vendor Statement (.pdf)</span>
+                  <span className="text-[10px] px-1.5 py-0.2 bg-amber-400 text-slate-950 rounded font-semibold">1-Click</span>
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">Complete summary, overdue notice, and invoice table in standard PDF</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDownloadPDF}
+                disabled={invoices.length === 0}
+                className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 font-bold rounded-md transition-colors shadow-xs"
+              >
+                Download PDF
+              </button>
+            </div>
+          </div>
+
+          {/* Option 2: Full 34-Field Master Invoice Excel */}
           <div className="p-3.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-lg flex items-center justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 rounded-lg">
@@ -93,40 +149,51 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => exportInvoicesToExcel(invoices)}
-                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-md font-medium transition-colors"
+                disabled={invoices.length === 0}
+                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-800 dark:text-slate-200 rounded-md font-medium transition-colors"
               >
                 Excel (.xlsx)
               </button>
               <button
                 onClick={handleExportInvoiceCsv}
-                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-md font-medium transition-colors"
+                disabled={invoices.length === 0}
+                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-800 dark:text-slate-200 rounded-md font-medium transition-colors"
               >
                 CSV
               </button>
             </div>
           </div>
 
-          {/* Option 2: Point 2 Payment Report */}
+          {/* Option 3: Point 2 Payment Report (Excel + PDF) */}
           <div className="p-3.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-lg flex items-center justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-sky-100 dark:bg-sky-500/10 text-sky-700 dark:text-sky-400 rounded-lg">
                 <FileCheck className="w-5 h-5" />
               </div>
               <div>
-                <div className="font-semibold text-slate-900 dark:text-slate-200">Point 2 Bank Payment Register (.xlsx)</div>
+                <div className="font-semibold text-slate-900 dark:text-slate-200">Point 2 Bank Payment Register</div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400">13 columns: UTR, Payment Number, Net Amount, Reversals</div>
               </div>
             </div>
-            <button
-              onClick={() => exportPaymentsToExcel(payments)}
-              disabled={payments.length === 0}
-              className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-800 dark:text-slate-200 rounded-md font-medium transition-colors"
-            >
-              Excel (.xlsx)
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDownloadPaymentPDF}
+                disabled={payments.length === 0}
+                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-800 dark:text-slate-200 rounded-md font-medium transition-colors"
+              >
+                PDF
+              </button>
+              <button
+                onClick={() => exportPaymentsToExcel(payments)}
+                disabled={payments.length === 0}
+                className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-800 dark:text-slate-200 rounded-md font-medium transition-colors"
+              >
+                Excel (.xlsx)
+              </button>
+            </div>
           </div>
 
-          {/* Option 3: Critical Overdue Recovery Report */}
+          {/* Option 4: Critical Overdue Recovery Report */}
           <div className="p-3.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-lg flex items-center justify-between hover:border-red-300 dark:hover:border-red-900/50 transition-colors">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-red-100 dark:bg-red-500/10 text-red-700 dark:text-red-400 rounded-lg">
@@ -146,22 +213,23 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             </button>
           </div>
 
-          {/* Option 4: Printable Vendor Statement */}
+          {/* Option 5: Browser Print Dialog */}
           <div className="p-3.5 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-lg flex items-center justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded-lg">
+              <div className="p-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg">
                 <Printer className="w-5 h-5" />
               </div>
               <div>
-                <div className="font-semibold text-slate-900 dark:text-slate-200">Printable Vendor Account Summary</div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400">Clean printout or Save as PDF for vendor records</div>
+                <div className="font-semibold text-slate-900 dark:text-slate-200">Print to Paper / System Dialog</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">Open browser print window directly</div>
               </div>
             </div>
             <button
               onClick={handlePrint}
-              className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-md transition-colors"
+              disabled={invoices.length === 0}
+              className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-50 text-slate-800 dark:text-slate-200 font-medium rounded-md transition-colors"
             >
-              Print / PDF
+              Print Dialog
             </button>
           </div>
 

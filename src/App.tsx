@@ -13,6 +13,7 @@ import { InvoiceDetailModal } from './components/InvoiceDetailModal';
 import { UploadModal } from './components/UploadModal';
 import { ExportModal } from './components/ExportModal';
 import { PrintStatement } from './components/PrintStatement';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { Upload, FileSpreadsheet, ShieldCheck, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
@@ -407,6 +408,9 @@ export default function App() {
         payments={payments}
         summary={summary}
       />
+
+      {/* Offline Connectivity Notification */}
+      <OfflineIndicator />
 
     </div>
   );

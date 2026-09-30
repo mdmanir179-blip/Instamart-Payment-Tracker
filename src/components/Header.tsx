@@ -12,6 +12,7 @@ import {
   Moon,
   Trash2
 } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   currentTab: ViewTab;
@@ -122,9 +123,12 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </nav>
 
-          {/* Zone 3: Primary Actions + Theme Toggle */}
+          {/* Zone 3: Primary Actions + PWA Install + Theme Toggle */}
           <div className="flex items-center gap-2">
             
+            {/* PWA Save & Install Button (Solves Problem 3) */}
+            <PWAInstallButton />
+
             {/* Theme Toggle (Light / Dark) */}
             <button
               onClick={onToggleTheme}

@@ -73,12 +73,22 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const handleConfirmApply = () => {
     if (!parseResult) return;
 
-    if (parseResult.payments) {
-      onPaymentsLoaded(parseResult.payments, uploadMode);
-      setUploadSuccessMsg(`Successfully loaded ${parseResult.payments.length} payment records!`);
-    } else if (parseResult.invoices) {
+    const countInv = parseResult.invoices?.length || 0;
+    const countPmt = parseResult.payments?.length || 0;
+
+    if (parseResult.invoices && countInv > 0) {
       onInvoicesLoaded(parseResult.invoices, uploadMode);
-      setUploadSuccessMsg(`Successfully loaded ${parseResult.invoices.length} invoices!`);
+    }
+    if (parseResult.payments && countPmt > 0) {
+      onPaymentsLoaded(parseResult.payments, uploadMode);
+    }
+
+    if (countInv > 0 && countPmt > 0) {
+      setUploadSuccessMsg(`Successfully loaded ${countInv} invoices and ${countPmt} payments!`);
+    } else if (countInv > 0) {
+      setUploadSuccessMsg(`Successfully loaded ${countInv} invoices!`);
+    } else if (countPmt > 0) {
+      setUploadSuccessMsg(`Successfully loaded ${countPmt} payment records!`);
     }
 
     setTimeout(() => {

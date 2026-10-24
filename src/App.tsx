@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ViewTab, InvoiceRecord, PaymentRecord } from './types';
 import { deriveInitialPayments } from './data/initialData';
 import { calculateFinancialSummary } from './utils/summaryCalculator';
+import { loadSharedDatasetFromUrl } from './utils/shareManager';
 import { Header } from './components/Header';
 import { MetricCards } from './components/MetricCards';
 import { AnalyticsCharts } from './components/AnalyticsCharts';
@@ -12,18 +13,28 @@ import { AgingAnalysisView } from './components/AgingAnalysisView';
 import { InvoiceDetailModal } from './components/InvoiceDetailModal';
 import { UploadModal } from './components/UploadModal';
 import { ExportModal } from './components/ExportModal';
+import { ShareModal } from './components/ShareModal';
 import { ClearDataModal } from './components/ClearDataModal';
 import { PrintStatement } from './components/PrintStatement';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { Upload, FileSpreadsheet, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { InstamartLogo } from './components/InstamartLogo';
+import { 
+  Upload, 
+  FileSpreadsheet, 
+  ShieldCheck, 
+  CheckCircle2, 
+  Share2, 
+  Info, 
+  Check, 
+  Sparkles,
+  X
+} from 'lucide-react';
 
 export default function App() {
-  // 100% Clean: Pure state with zero demo data.
   const [invoices, setInvoices] = useState<InvoiceRecord[]>(() => {
     try {
       const saved = localStorage.getItem('instamart_invoices');
       if (saved) {
-        // Automatically purge any previous benchmark demo data
         if (saved.includes('TBC/26-27/831') || saved.includes('VIAPO74796') || saved.includes('1N96368405')) {
           localStorage.removeItem('instamart_invoices');
           localStorage.removeItem('instamart_payments');
@@ -54,6 +65,14 @@ export default function App() {
     }
     return [];
   });
+
+  // Shared dataset notice from URL link
+  const [sharedNotice, setSharedNotice] = useState<{
+    vendorName: string;
+    count: number;
+    note?: string;
+    createdAt?: string;
+  } | null>(null);
 
   // Theme support
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -108,6 +127,27 @@ export default function App() {
     }
   }, [payments]);
 
+  // Check URL on startup for shared dataset link (?share=... or #data=...)
+  useEffect(() => {
+    (async () => {
+      const shared = await loadSharedDatasetFromUrl();
+      if (shared && ((shared.invoices && shared.invoices.length > 0) || (shared.payments && shared.payments.length > 0))) {
+        if (shared.invoices && shared.invoices.length > 0) {
+          setInvoices(shared.invoices);
+        }
+        if (shared.payments && shared.payments.length > 0) {
+          setPayments(shared.payments);
+        }
+        setSharedNotice({
+          vendorName: shared.vendorName || 'Shared Vendor',
+          count: shared.invoices?.length || 0,
+          note: shared.note,
+          createdAt: shared.createdAt,
+        });
+      }
+    })();
+  }, []);
+
   const [currentTab, setCurrentTab] = useState<ViewTab>('dashboard');
   
   // Interactive filters & modals
@@ -115,6 +155,7 @@ export default function App() {
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const [isClearDataOpen, setIsClearDataOpen] = useState(false);
 
   // Financial summary computation
@@ -135,6 +176,7 @@ export default function App() {
       const newDerived = deriveInitialPayments(newInvoices);
       setPayments(prev => [...prev, ...newDerived]);
     }
+    setSharedNotice(null);
   };
 
   // Handle uploaded payments
@@ -153,15 +195,18 @@ export default function App() {
     setSelectedWarehouse(undefined);
     setSelectedInvoice(null);
     setCurrentTab('dashboard');
+    setSharedNotice(null);
     try {
       localStorage.removeItem('instamart_invoices');
       localStorage.removeItem('instamart_payments');
+      if (window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
     } catch {
       // ignore
     }
   };
 
-  // Filter actions from KPI cards
   const handleFilterOverdue = () => {
     setCurrentTab('invoices');
   };
@@ -199,6 +244,7 @@ export default function App() {
         onTabChange={setCurrentTab}
         onOpenUpload={() => setIsUploadOpen(true)}
         onOpenExport={() => setIsExportOpen(true)}
+        onOpenShare={() => setIsShareOpen(true)}
         onClearData={() => setIsClearDataOpen(true)}
         vendorName={vendorName}
         totalInvoices={invoices.length}
@@ -207,24 +253,76 @@ export default function App() {
         onToggleTheme={toggleTheme}
       />
 
-      {/* Main Content Viewport */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      {/* Main Content Viewport - Full Screen Desktop Presentation */}
+      <main className="flex-1 w-full max-w-[1920px] mx-auto px-3 sm:px-6 lg:px-8 py-5 space-y-5">
         
+        {/* Shared Dataset Notification Banner */}
+        {sharedNotice && hasData && (
+          <div className="bg-gradient-to-r from-sky-500/10 via-amber-500/10 to-emerald-500/10 border border-sky-400/30 dark:border-sky-500/30 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-sky-500/20 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                <Share2 className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
+                    Viewing Shared Dataset: {sharedNotice.vendorName}
+                  </span>
+                  <span className="text-[11px] bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-300 font-medium px-2 py-0.5 rounded">
+                    {sharedNotice.count} Invoices Loaded
+                  </span>
+                </div>
+                {sharedNotice.note && (
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 italic">
+                    &ldquo;{sharedNotice.note}&rdquo;
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-end sm:self-center">
+              <button
+                onClick={() => {
+                  try {
+                    localStorage.setItem('instamart_invoices', JSON.stringify(invoices));
+                    localStorage.setItem('instamart_payments', JSON.stringify(payments));
+                  } catch {}
+                  setSharedNotice(null);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg text-xs shadow-xs transition-colors"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Save to Workspace</span>
+              </button>
+
+              <button
+                onClick={() => setSharedNotice(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                title="Dismiss banner"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* If no data loaded, show clean welcome & upload invitation */}
         {!hasData ? (
-          <div className="max-w-2xl mx-auto my-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 sm:p-12 text-center shadow-lg transition-colors">
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-5 shadow-xs">
-              <FileSpreadsheet className="w-8 h-8" />
+          <div className="max-w-3xl mx-auto my-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 sm:p-12 text-center shadow-lg transition-colors">
+            
+            {/* New Logo Vector */}
+            <div className="flex justify-center mb-5">
+              <InstamartLogo className="w-16 h-16" size={64} />
             </div>
 
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-2">
               Welcome to Instamart Payment Tracker
             </h1>
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-md mx-auto mb-6">
-              Upload your official Instamart Excel (.xlsx, .xls) or CSV Invoice and Payment reports to begin tracking sales, overdue invoices, and bank settlements.
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-lg mx-auto mb-6">
+              Upload your official Instamart Excel (.xlsx, .xls) or CSV Invoice and Payment reports to begin tracking sales, reconciling bank remittances, and sharing reports via web link.
             </p>
 
-            <div className="flex items-center justify-center">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <button
                 onClick={() => setIsUploadOpen(true)}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl text-sm shadow-md transition-colors"
@@ -240,23 +338,23 @@ export default function App() {
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <div>
                   <div className="font-semibold text-slate-800 dark:text-slate-200">Point 1: 34 Fields</div>
-                  <div className="text-slate-500 text-[11px]">Gross sales, PO/GRN, TDS, returns, net payable</div>
+                  <div className="text-slate-500 text-[11px]">Gross sales, PO/GRN, Last Payment Date, Net Payable</div>
                 </div>
               </div>
 
               <div className="flex items-start gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-semibold text-slate-800 dark:text-slate-200">Point 2: 13 Fields</div>
-                  <div className="text-slate-500 text-[11px]">Bank UTR, remittance, reversals, net credit</div>
+                  <div className="font-semibold text-slate-800 dark:text-slate-200">Web Link Sharing</div>
+                  <div className="text-slate-500 text-[11px]">Share uploaded data sheets with anyone via 1 direct link</div>
                 </div>
               </div>
 
               <div className="flex items-start gap-2.5">
                 <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-semibold text-slate-800 dark:text-slate-200">100% INR Accounting</div>
-                  <div className="text-slate-500 text-[11px]">Accurate currency calculations & export</div>
+                  <div className="font-semibold text-slate-800 dark:text-slate-200">Full Screen Desktop</div>
+                  <div className="text-slate-500 text-[11px]">Computer full screen display with high-density audit views</div>
                 </div>
               </div>
             </div>
@@ -274,7 +372,7 @@ export default function App() {
 
             {/* Tab 1: Dashboard View */}
             {currentTab === 'dashboard' && (
-              <div className="space-y-6">
+              <div className="space-y-5">
                 <AnalyticsCharts
                   invoices={invoices}
                   summary={summary}
@@ -284,13 +382,22 @@ export default function App() {
                 {/* Live Invoices Register */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Active Invoice Register</h3>
-                    <button
-                      onClick={() => setCurrentTab('invoices')}
-                      className="text-xs text-amber-600 dark:text-amber-400 hover:underline font-medium"
-                    >
-                      View All {invoices.length} Invoices &rarr;
-                    </button>
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Active Invoice Register (Sheet 1)</h3>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setIsShareOpen(true)}
+                        className="text-xs text-sky-600 dark:text-sky-400 hover:underline font-semibold flex items-center gap-1"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        <span>Share Sheet via Link</span>
+                      </button>
+                      <button
+                        onClick={() => setCurrentTab('invoices')}
+                        className="text-xs text-amber-600 dark:text-amber-400 hover:underline font-medium"
+                      >
+                        View All {invoices.length} Invoices &rarr;
+                      </button>
+                    </div>
                   </div>
 
                   <InvoiceTable
@@ -309,11 +416,18 @@ export default function App() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">Invoice Master Register</h2>
+                    <h2 className="text-base font-bold text-slate-900 dark:text-white">Invoice Master Register (Sheet 1)</h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Comprehensive audit view for all 34 Instamart invoice report fields with multi-parameter search.
+                      Comprehensive audit view with all 34 fields including Invoice Date, Due Date, and Last Payment Date.
                     </p>
                   </div>
+                  <button
+                    onClick={() => setIsShareOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-100 hover:bg-sky-200 dark:bg-sky-950 text-sky-800 dark:text-sky-300 font-semibold rounded-lg text-xs transition-colors"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>Share This Sheet</span>
+                  </button>
                 </div>
 
                 <InvoiceTable
@@ -398,6 +512,15 @@ export default function App() {
         invoices={invoices}
         payments={payments}
         summary={summary}
+      />
+
+      {/* Share Dataset via Web Link Modal */}
+      <ShareModal
+        isOpen={isShareOpen}
+        onClose={() => setIsShareOpen(false)}
+        invoices={invoices}
+        payments={payments}
+        vendorName={vendorName}
       />
 
       {/* Hidden Printable Vendor Statement for Window Print */}

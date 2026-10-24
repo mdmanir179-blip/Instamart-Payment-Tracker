@@ -80,10 +80,11 @@ export const PrintStatement: React.FC<PrintStatementProps> = ({
               <th className="py-1.5 px-2">Warehouse</th>
               <th className="py-1.5 px-2">PO #</th>
               <th className="py-1.5 px-2 text-right">Gross (₹)</th>
-              <th className="py-1.5 px-2 text-right">Deductions (₹)</th>
-              <th className="py-1.5 px-2 text-right">Net Payable (₹)</th>
+              <th className="py-1.5 px-2 text-right">Net (₹)</th>
               <th className="py-1.5 px-2 text-right">Paid (₹)</th>
               <th className="py-1.5 px-2 text-right">Balance (₹)</th>
+              <th className="py-1.5 px-2">Due Date</th>
+              <th className="py-1.5 px-2">Last Payment Date</th>
               <th className="py-1.5 px-2">Status</th>
             </tr>
           </thead>
@@ -95,10 +96,11 @@ export const PrintStatement: React.FC<PrintStatementProps> = ({
                 <td className="py-1 px-2 font-sans">{inv.warehouseName}</td>
                 <td className="py-1 px-2">{inv.poNumber}</td>
                 <td className="py-1 px-2 text-right">{formatINR(inv.invoicesRecorded || inv.grossGrnAmount)}</td>
-                <td className="py-1 px-2 text-right">{inv.totalDeductions > 0 ? formatINR(inv.totalDeductions) : '0.00'}</td>
                 <td className="py-1 px-2 text-right font-bold">{formatINR(inv.netPayableAmount)}</td>
                 <td className="py-1 px-2 text-right text-emerald-800">{formatINR(inv.paymentAmount)}</td>
                 <td className="py-1 px-2 text-right font-bold">{formatINR(inv.outstandingPayment)}</td>
+                <td className="py-1 px-2">{inv.dueDate || '—'}</td>
+                <td className="py-1 px-2 font-bold text-emerald-800">{inv.lastPaymentDate || (inv.paymentAmount > 0 ? 'Settled' : '—')}</td>
                 <td className="py-1 px-2 font-sans capitalize">{inv.paymentStatus}</td>
               </tr>
             ))}

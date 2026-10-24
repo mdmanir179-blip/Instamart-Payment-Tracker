@@ -374,7 +374,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                 </button>
               </th>
 
-              {/* 3. Explicitly labeled Payment Date */}
+              {/* 3. Explicitly labeled Last Payment Date */}
               <th className="py-3 px-3 font-semibold whitespace-nowrap">
                 <button 
                   onClick={() => handleSort('lastPaymentDate')} 
@@ -382,7 +382,7 @@ export const InvoiceTable: React.FC<InvoiceTableProps> = ({
                   title="Last Payment / Remittance Date"
                 >
                   <Calendar className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Payment Date</span>
+                  <span>Last Payment Date</span>
                   <ArrowUpDown className="w-3 h-3 text-slate-400" />
                 </button>
               </th>

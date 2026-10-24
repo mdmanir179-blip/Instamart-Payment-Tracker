@@ -102,10 +102,10 @@ export const InvoiceDetailModal: React.FC<InvoiceDetailModalProps> = ({
 
             <div>
               <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-purple-500" />
-                <span>Payment Date</span>
+                <Calendar className="w-3 h-3 text-emerald-500" />
+                <span>Last Payment Date</span>
               </span>
-              <span className="font-bold text-purple-700 dark:text-purple-300 font-mono text-xs mt-0.5 block">
+              <span className="font-bold text-emerald-700 dark:text-emerald-400 font-mono text-xs mt-0.5 block">
                 {invoice.lastPaymentDate || (invoice.paymentAmount > 0 ? 'Recorded' : 'Unpaid')}
               </span>
             </div>

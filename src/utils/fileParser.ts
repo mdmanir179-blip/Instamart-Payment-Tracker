@@ -162,9 +162,14 @@ export function mapRowsToInvoices(rawRows: Record<string, any>[]): InvoiceRecord
       'PaymentDate', 
       'Paid Date', 
       'PaidDate', 
+      'Last Payment Dt',
+      'Last Paid Date',
       'Disbursed Date', 
       'Settlement Date', 
-      'Value Date'
+      'Value Date',
+      'Remittance Date',
+      'Pmt Date',
+      'Payment Dt'
     ));
 
     const totalDeductions = tdsTcs + purchaseReturnAmount + brandDiscountPromoClaims + otherDebitAmount + otherAdjustments;
@@ -283,13 +288,34 @@ export async function parseUploadedFile(file: File): Promise<ParseResult> {
     const arrayBuffer = await file.arrayBuffer();
     // Enable cellDates: true so Excel serial dates are converted to Date objects
     const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
-    
-    // Read raw json objects
-    const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' });
+    let invoices: InvoiceRecord[] = [];
+    let payments: PaymentRecord[] = [];
+    let primaryType: DetectedFileType = 'unknown';
 
-    if (!jsonData || jsonData.length === 0) {
+    // Scan sheets in workbook (e.g. Sheet 1: Invoices, Sheet 2: Payments)
+    for (let i = 0; i < workbook.SheetNames.length; i++) {
+      const sheetName = workbook.SheetNames[i];
+      const worksheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' });
+      if (!rows || rows.length === 0) continue;
+
+      const headers = Object.keys(rows[0] || {});
+      const sheetType = detectReportType(headers);
+
+      if (sheetType === 'payment_report') {
+        if (payments.length === 0) {
+          payments = mapRowsToPayments(rows);
+          if (i === 0) primaryType = 'payment_report';
+        }
+      } else {
+        if (invoices.length === 0) {
+          invoices = mapRowsToInvoices(rows);
+          if (i === 0) primaryType = 'invoice_report';
+        }
+      }
+    }
+
+    if (invoices.length === 0 && payments.length === 0) {
       return {
         fileType: 'unknown',
         fileName,
@@ -298,28 +324,36 @@ export async function parseUploadedFile(file: File): Promise<ParseResult> {
       };
     }
 
-    const headers = Object.keys(jsonData[0] || {});
-    const fileType = detectReportType(headers);
+    // Cross-link: If an invoice has missing lastPaymentDate, match with payment reference from payments
+    if (invoices.length > 0 && payments.length > 0) {
+      const pmtRefMap = new Map<string, string>();
+      payments.forEach(p => {
+        if (p.paymentReferenceNo && p.paymentDate) {
+          pmtRefMap.set(p.paymentReferenceNo.toLowerCase().trim(), p.paymentDate);
+        }
+      });
 
-    if (fileType === 'payment_report') {
-      const payments = mapRowsToPayments(jsonData);
-      return {
-        fileType,
-        payments,
-        fileName,
-        totalRows: payments.length,
-        errors: []
-      };
-    } else {
-      const invoices = mapRowsToInvoices(jsonData);
-      return {
-        fileType: 'invoice_report',
-        invoices,
-        fileName,
-        totalRows: invoices.length,
-        errors: []
-      };
+      invoices = invoices.map(inv => {
+        if (!inv.lastPaymentDate && inv.paymentReferenceNo) {
+          const matchDate = pmtRefMap.get(inv.paymentReferenceNo.toLowerCase().trim());
+          if (matchDate) {
+            return { ...inv, lastPaymentDate: matchDate };
+          }
+        }
+        return inv;
+      });
     }
+
+    const finalType = primaryType !== 'unknown' ? primaryType : invoices.length > 0 ? 'invoice_report' : 'payment_report';
+
+    return {
+      fileType: finalType,
+      invoices: invoices.length > 0 ? invoices : undefined,
+      payments: payments.length > 0 ? payments : undefined,
+      fileName,
+      totalRows: (invoices.length || 0) + (payments.length || 0),
+      errors: []
+    };
   } catch (err: any) {
     return {
       fileType: 'unknown',

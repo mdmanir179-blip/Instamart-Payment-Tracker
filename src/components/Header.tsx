@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ViewTab } from '../types';
 import { 
   LayoutDashboard, 
@@ -10,15 +10,20 @@ import {
   Download, 
   Sun, 
   Moon,
-  Trash2
+  Trash2,
+  Share2,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
+import { InstamartLogo } from './InstamartLogo';
 
 interface HeaderProps {
   currentTab: ViewTab;
   onTabChange: (tab: ViewTab) => void;
   onOpenUpload: () => void;
   onOpenExport: () => void;
+  onOpenShare: () => void;
   onClearData: () => void;
   vendorName: string;
   totalInvoices: number;
@@ -32,6 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   onTabChange,
   onOpenUpload,
   onOpenExport,
+  onOpenShare,
   onClearData,
   vendorName,
   totalInvoices,
@@ -39,17 +45,39 @@ export const Header: React.FC<HeaderProps> = ({
   theme,
   onToggleTheme
 }) => {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    try {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.warn('Fullscreen request error:', err);
+    }
+  };
+
   return (
     <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 sticky top-0 z-40 transition-colors">
-      {/* Top Bar Contract: 3 zones */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* Top Bar Container - Full Screen desktop presence */}
+      <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           
-          {/* Zone 1: Single text element wordmark */}
+          {/* Zone 1: New Brand Logo & Title */}
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center font-bold text-slate-950 text-sm shadow-sm">
-              IM
-            </div>
+            <InstamartLogo className="w-9 h-9" size={36} />
             <div>
               <a href="#" className="text-base font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
                 Instamart Payment Tracker
@@ -125,10 +153,28 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </nav>
 
-          {/* Zone 3: Primary Actions + PWA Install + Theme Toggle */}
+          {/* Zone 3: Primary Actions + Fullscreen + Share Link + PWA + Theme */}
           <div className="flex items-center gap-2">
             
-            {/* PWA Save & Install Button (Solves Problem 3) */}
+            {/* Computer Full Screen Toggle */}
+            <button
+              onClick={toggleFullscreen}
+              className={`p-2 rounded-lg transition-colors border ${
+                isFullscreen 
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400' 
+                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700/80 text-slate-600 dark:text-slate-300'
+              }`}
+              title={isFullscreen ? 'Exit Computer Full Screen' : 'View in Computer Full Screen (F11)'}
+              aria-label="Toggle Fullscreen"
+            >
+              {isFullscreen ? (
+                <Minimize2 className="w-4 h-4" />
+              ) : (
+                <Maximize2 className="w-4 h-4" />
+              )}
+            </button>
+
+            {/* PWA Save & Install Button */}
             <PWAInstallButton />
 
             {/* Theme Toggle (Light / Dark) */}
@@ -157,14 +203,28 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {/* Upload Button */}
             <button
               onClick={onOpenUpload}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 rounded-lg transition-colors whitespace-nowrap"
             >
               <Upload className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-              <span>Upload Report</span>
+              <span className="hidden sm:inline">Upload</span>
+              <span className="sm:hidden">Upload</span>
             </button>
 
+            {/* Share Link Button (Solves sharing data sheets via link) */}
+            <button
+              onClick={onOpenShare}
+              disabled={totalInvoices === 0 && totalPayments === 0}
+              title={totalInvoices === 0 ? 'Upload data first to generate share link' : 'Share uploaded data via web link'}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-sky-800 dark:text-sky-200 bg-sky-100 hover:bg-sky-200 dark:bg-sky-950/70 dark:hover:bg-sky-900 border border-sky-300 dark:border-sky-800/80 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors whitespace-nowrap"
+            >
+              <Share2 className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+              <span>Share Link</span>
+            </button>
+
+            {/* Export Button */}
             <button
               onClick={onOpenExport}
               disabled={totalInvoices === 0}

@@ -18,6 +18,14 @@ import { ClearDataModal } from './components/ClearDataModal';
 import { PrintStatement } from './components/PrintStatement';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { InstamartLogo } from './components/InstamartLogo';
+import { LastUploadCard } from './components/LastUploadCard';
+import { testFirestoreConnection } from './firebase';
+import { 
+  subscribeToSharedLedger, 
+  saveLedgerToFirestore, 
+  clearLedgerFromFirestore, 
+  LedgerMetadata 
+} from './services/ledgerSyncService';
 import { 
   Upload, 
   FileSpreadsheet, 
@@ -66,6 +74,19 @@ export default function App() {
     return [];
   });
 
+  // Cloud database shared ledger metadata (last uploaded at, file name, counts)
+  const [ledgerMetadata, setLedgerMetadata] = useState<LedgerMetadata | null>(() => {
+    try {
+      const saved = localStorage.getItem('instamart_ledger_meta');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return null;
+  });
+
+  const [isDbSyncing, setIsDbSyncing] = useState(false);
+
   // Shared dataset notice from URL link
   const [sharedNotice, setSharedNotice] = useState<{
     vendorName: string;
@@ -102,7 +123,7 @@ export default function App() {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Sync state to localStorage
+  // Sync state to localStorage for offline cache
   useEffect(() => {
     try {
       if (invoices.length > 0) {
@@ -126,6 +147,46 @@ export default function App() {
       // ignore
     }
   }, [payments]);
+
+  useEffect(() => {
+    try {
+      if (ledgerMetadata) {
+        localStorage.setItem('instamart_ledger_meta', JSON.stringify(ledgerMetadata));
+      } else {
+        localStorage.removeItem('instamart_ledger_meta');
+      }
+    } catch {
+      // ignore
+    }
+  }, [ledgerMetadata]);
+
+  // Connect to Firestore and subscribe to real-time shared ledger
+  // Everyone with this software sees the exact same uploaded data in real time!
+  useEffect(() => {
+    testFirestoreConnection();
+
+    setIsDbSyncing(true);
+    const unsubscribe = subscribeToSharedLedger(
+      (payload) => {
+        setIsDbSyncing(false);
+        if (payload.metadata) {
+          setLedgerMetadata(payload.metadata);
+          if (payload.invoices && payload.invoices.length > 0) {
+            setInvoices(payload.invoices);
+          }
+          if (payload.payments && payload.payments.length > 0) {
+            setPayments(payload.payments);
+          }
+        }
+      },
+      (err) => {
+        console.warn('Real-time database sync note:', err);
+        setIsDbSyncing(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   // Check URL on startup for shared dataset link (?share=... or #data=...)
   useEffect(() => {
@@ -164,34 +225,82 @@ export default function App() {
   }, [invoices]);
 
   // Vendor & Customer details from first record if loaded
-  const vendorName = invoices[0]?.vendorName || (payments[0]?.vendorName ?? '');
+  const vendorName = invoices[0]?.vendorName || (payments[0]?.vendorName ?? ledgerMetadata?.vendorName ?? '');
 
-  // Handle uploaded invoices
-  const handleInvoicesLoaded = (newInvoices: InvoiceRecord[], mode: 'replace' | 'append') => {
+  // Handle uploaded invoices — save to Firestore database so all users see it instantly
+  const handleInvoicesLoaded = async (newInvoices: InvoiceRecord[], mode: 'replace' | 'append', fileName?: string) => {
+    let updatedInvoices: InvoiceRecord[] = [];
+    let updatedPayments: PaymentRecord[] = [];
+
     if (mode === 'replace') {
-      setInvoices(newInvoices);
-      setPayments(deriveInitialPayments(newInvoices));
+      updatedInvoices = newInvoices;
+      updatedPayments = deriveInitialPayments(newInvoices);
     } else {
-      setInvoices(prev => [...prev, ...newInvoices]);
+      updatedInvoices = [...invoices, ...newInvoices];
       const newDerived = deriveInitialPayments(newInvoices);
-      setPayments(prev => [...prev, ...newDerived]);
+      updatedPayments = [...payments, ...newDerived];
     }
+
+    setInvoices(updatedInvoices);
+    setPayments(updatedPayments);
     setSharedNotice(null);
-  };
 
-  // Handle uploaded payments
-  const handlePaymentsLoaded = (newPayments: PaymentRecord[], mode: 'replace' | 'append') => {
-    if (mode === 'replace') {
-      setPayments(newPayments);
-    } else {
-      setPayments(prev => [...prev, ...newPayments]);
+    // Save to Firestore cloud database
+    try {
+      setIsDbSyncing(true);
+      const meta = await saveLedgerToFirestore({
+        invoices: updatedInvoices,
+        payments: updatedPayments,
+        fileName: fileName || 'Instamart_Invoice_Report.xlsx',
+        fileType: 'invoice_report',
+        vendorName: updatedInvoices[0]?.vendorName,
+      });
+      if (meta) {
+        setLedgerMetadata(meta);
+      }
+    } catch (err) {
+      console.error('Failed to sync invoices to shared database:', err);
+    } finally {
+      setIsDbSyncing(false);
     }
   };
 
-  // Clear all data directly from in-app modal
-  const handleConfirmClear = () => {
+  // Handle uploaded payments — save to Firestore database
+  const handlePaymentsLoaded = async (newPayments: PaymentRecord[], mode: 'replace' | 'append', fileName?: string) => {
+    let updatedPayments: PaymentRecord[] = [];
+    if (mode === 'replace') {
+      updatedPayments = newPayments;
+    } else {
+      updatedPayments = [...payments, ...newPayments];
+    }
+
+    setPayments(updatedPayments);
+
+    // Save to Firestore cloud database
+    try {
+      setIsDbSyncing(true);
+      const meta = await saveLedgerToFirestore({
+        invoices,
+        payments: updatedPayments,
+        fileName: fileName || 'Instamart_Payment_Report.xlsx',
+        fileType: 'payment_report',
+        vendorName: invoices[0]?.vendorName || updatedPayments[0]?.vendorName,
+      });
+      if (meta) {
+        setLedgerMetadata(meta);
+      }
+    } catch (err) {
+      console.error('Failed to sync payments to shared database:', err);
+    } finally {
+      setIsDbSyncing(false);
+    }
+  };
+
+  // Clear all data directly from in-app modal and delete from shared database
+  const handleConfirmClear = async () => {
     setInvoices([]);
     setPayments([]);
+    setLedgerMetadata(null);
     setSelectedWarehouse(undefined);
     setSelectedInvoice(null);
     setCurrentTab('dashboard');
@@ -199,12 +308,20 @@ export default function App() {
     try {
       localStorage.removeItem('instamart_invoices');
       localStorage.removeItem('instamart_payments');
+      localStorage.removeItem('instamart_ledger_meta');
       if (window.history.replaceState) {
         window.history.replaceState(null, '', window.location.pathname);
       }
-    } catch {
-      // ignore
+      await clearLedgerFromFirestore();
+    } catch (err) {
+      console.warn('Failed to clear database:', err);
     }
+  };
+
+  const handleManualRefresh = async () => {
+    setIsDbSyncing(true);
+    await testFirestoreConnection();
+    setTimeout(() => setIsDbSyncing(false), 500);
   };
 
   const handleFilterOverdue = () => {
@@ -308,60 +425,81 @@ export default function App() {
 
         {/* If no data loaded, show clean welcome & upload invitation */}
         {!hasData ? (
-          <div className="max-w-3xl mx-auto my-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 sm:p-12 text-center shadow-lg transition-colors">
-            
-            {/* New Logo Vector */}
-            <div className="flex justify-center mb-5">
-              <InstamartLogo className="w-16 h-16" size={64} />
-            </div>
+          <div className="max-w-4xl mx-auto my-6 space-y-5">
+            <LastUploadCard
+              metadata={ledgerMetadata}
+              totalInvoices={invoices.length}
+              totalPayments={payments.length}
+              isSyncing={isDbSyncing}
+              onOpenUpload={() => setIsUploadOpen(true)}
+              onManualRefresh={handleManualRefresh}
+            />
 
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-2">
-              Welcome to Instamart Payment Tracker
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-lg mx-auto mb-6">
-              Upload your official Instamart Excel (.xlsx, .xls) or CSV Invoice and Payment reports to begin tracking sales, reconciling bank remittances, and sharing reports via web link.
-            </p>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 sm:p-12 text-center shadow-lg transition-colors">
+              
+              {/* New Logo Vector */}
+              <div className="flex justify-center mb-5">
+                <InstamartLogo className="w-16 h-16" size={64} />
+              </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              <button
-                onClick={() => setIsUploadOpen(true)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl text-sm shadow-md transition-colors"
-              >
-                <Upload className="w-4 h-4" />
-                <span>Upload Excel / CSV Report</span>
-              </button>
-            </div>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-2">
+                Welcome to Instamart Payment Tracker
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 max-w-lg mx-auto mb-6">
+                Upload your official Instamart Excel (.xlsx, .xls) or CSV Invoice and Payment reports. All uploaded data is automatically saved to the shared cloud database so everyone using this software sees the same data in real time.
+              </p>
 
-            {/* Feature highlights */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8 pt-8 border-t border-slate-100 dark:border-slate-800 text-left text-xs">
-              <div className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-semibold text-slate-800 dark:text-slate-200">Point 1: 34 Fields</div>
-                  <div className="text-slate-500 text-[11px]">Gross sales, PO/GRN, Last Payment Date, Net Payable</div>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <button
+                  onClick={() => setIsUploadOpen(true)}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-xl text-sm shadow-md transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Upload Excel / CSV Report</span>
+                </button>
+              </div>
+
+              {/* Feature highlights */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8 pt-8 border-t border-slate-100 dark:border-slate-800 text-left text-xs">
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold text-slate-800 dark:text-slate-200">Point 1: 34 Fields</div>
+                    <div className="text-slate-500 text-[11px]">Gross sales, PO/GRN, Last Payment Date, Net Payable</div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold text-slate-800 dark:text-slate-200">Shared Cloud Database</div>
+                    <div className="text-slate-500 text-[11px]">Instant real-time sync across all team members and devices</div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-semibold text-slate-800 dark:text-slate-200">Full Screen Desktop</div>
+                    <div className="text-slate-500 text-[11px]">Computer full screen display with high-density audit views</div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-semibold text-slate-800 dark:text-slate-200">Web Link Sharing</div>
-                  <div className="text-slate-500 text-[11px]">Share uploaded data sheets with anyone via 1 direct link</div>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2.5">
-                <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-semibold text-slate-800 dark:text-slate-200">Full Screen Desktop</div>
-                  <div className="text-slate-500 text-[11px]">Computer full screen display with high-density audit views</div>
-                </div>
-              </div>
             </div>
-
           </div>
         ) : (
           <>
+            {/* Last Data Sheet Upload timestamp banner on Dashboard & Overview */}
+            <LastUploadCard
+              metadata={ledgerMetadata}
+              totalInvoices={invoices.length}
+              totalPayments={payments.length}
+              isSyncing={isDbSyncing}
+              onOpenUpload={() => setIsUploadOpen(true)}
+              onManualRefresh={handleManualRefresh}
+            />
+
             {/* KPI Metric Cards displayed on top of dashboard & ledger */}
             <MetricCards
               summary={summary}

@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all for any unspecified collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions for hardened validation
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidLedger(data) {
+      return data.keys().hasAll(['id', 'lastUploadedAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'lastUploadedAt', 'lastUploadFileName', 'lastUploadType', 'vendorName', 'totalInvoices', 'totalPayments', 'updatedAt'])
+        && data.id is string && data.id.size() <= 128
+        && data.lastUploadedAt is string && data.lastUploadedAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64
+        && (!('lastUploadFileName' in data) || (data.lastUploadFileName is string && data.lastUploadFileName.size() <= 256))
+        && (!('lastUploadType' in data) || (data.lastUploadType is string && data.lastUploadType.size() <= 64))
+        && (!('vendorName' in data) || (data.vendorName is string && data.vendorName.size() <= 256))
+        && (!('totalInvoices' in data) || (data.totalInvoices is number && data.totalInvoices >= 0))
+        && (!('totalPayments' in data) || (data.totalPayments is number && data.totalPayments >= 0));
+    }
+
+    function isValidChunk(data) {
+      return data.keys().hasAll(['id', 'chunkIndex', 'dataType', 'itemsJson'])
+        && data.keys().hasOnly(['id', 'chunkIndex', 'totalChunks', 'dataType', 'itemsJson', 'count', 'updatedAt'])
+        && data.id is string && data.id.size() <= 128
+        && data.chunkIndex is number && data.chunkIndex >= 0
+        && data.dataType is string && data.dataType.size() <= 32
+        && data.itemsJson is string && data.itemsJson.size() <= 800000
+        && (!('totalChunks' in data) || (data.totalChunks is number && data.totalChunks >= 0))
+        && (!('count' in data) || (data.count is number && data.count >= 0))
+        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+    }
+
+    // 1. Shared financial ledger metadata
+    match /ledgers/{ledgerId} {
+      allow get: if isValidId(ledgerId);
+      allow list: if true;
+      allow create: if isValidId(ledgerId) && isValidLedger(incoming());
+      allow update: if isValidId(ledgerId) && isValidLedger(incoming());
+      allow delete: if isValidId(ledgerId);
+
+      // Subcollection for synchronized dataset chunks
+      match /chunks/{chunkId} {
+        allow get: if isValidId(ledgerId) && isValidId(chunkId);
+        allow list: if isValidId(ledgerId);
+        allow create: if isValidId(ledgerId) && isValidId(chunkId) && isValidChunk(incoming());
+        allow update: if isValidId(ledgerId) && isValidId(chunkId) && isValidChunk(incoming());
+        allow delete: if isValidId(ledgerId) && isValidId(chunkId);
+      }
+    }
+  }
+}

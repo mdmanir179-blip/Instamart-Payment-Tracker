@@ -6,8 +6,8 @@ import { Upload, X, FileSpreadsheet, CheckCircle2, AlertCircle, RefreshCw, FileT
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onInvoicesLoaded: (invoices: InvoiceRecord[], mode: 'replace' | 'append') => void;
-  onPaymentsLoaded: (payments: PaymentRecord[], mode: 'replace' | 'append') => void;
+  onInvoicesLoaded: (invoices: InvoiceRecord[], mode: 'replace' | 'append', fileName?: string) => void;
+  onPaymentsLoaded: (payments: PaymentRecord[], mode: 'replace' | 'append', fileName?: string) => void;
 }
 
 export const UploadModal: React.FC<UploadModalProps> = ({
@@ -77,10 +77,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     const countPmt = parseResult.payments?.length || 0;
 
     if (parseResult.invoices && countInv > 0) {
-      onInvoicesLoaded(parseResult.invoices, uploadMode);
+      onInvoicesLoaded(parseResult.invoices, uploadMode, parseResult.fileName);
     }
     if (parseResult.payments && countPmt > 0) {
-      onPaymentsLoaded(parseResult.payments, uploadMode);
+      onPaymentsLoaded(parseResult.payments, uploadMode, parseResult.fileName);
     }
 
     if (countInv > 0 && countPmt > 0) {

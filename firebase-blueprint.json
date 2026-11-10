@@ -1,0 +1,100 @@
+{
+  "entities": {
+    "LedgerMetadata": {
+      "title": "LedgerMetadata",
+      "description": "Metadata for the active shared financial ledger",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier for the ledger document",
+          "maxLength": 128
+        },
+        "lastUploadedAt": {
+          "type": "string",
+          "description": "Timestamp string of the most recent data sheet upload",
+          "maxLength": 64
+        },
+        "lastUploadFileName": {
+          "type": "string",
+          "description": "Original file name of the uploaded Excel/CSV sheet",
+          "maxLength": 256
+        },
+        "lastUploadType": {
+          "type": "string",
+          "description": "Type of the uploaded data sheet (invoice_report or payment_report)",
+          "maxLength": 64
+        },
+        "vendorName": {
+          "type": "string",
+          "description": "Extracted vendor name or identifier",
+          "maxLength": 256
+        },
+        "totalInvoices": {
+          "type": "number",
+          "description": "Count of total invoice records loaded"
+        },
+        "totalPayments": {
+          "type": "number",
+          "description": "Count of total payment records loaded"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp when the ledger was last modified",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "lastUploadedAt", "updatedAt"]
+    },
+    "DataChunk": {
+      "title": "DataChunk",
+      "description": "Chunked dataset of invoices and payment records",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Chunk document ID",
+          "maxLength": 128
+        },
+        "chunkIndex": {
+          "type": "number",
+          "description": "Zero-indexed chunk sequence number"
+        },
+        "totalChunks": {
+          "type": "number",
+          "description": "Total number of chunks in this dataset"
+        },
+        "dataType": {
+          "type": "string",
+          "description": "Category of data stored in this chunk",
+          "maxLength": 32
+        },
+        "itemsJson": {
+          "type": "string",
+          "description": "Serialized JSON string containing invoice or payment records",
+          "maxLength": 800000
+        },
+        "count": {
+          "type": "number",
+          "description": "Number of items in this chunk"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp for this chunk update",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "chunkIndex", "dataType", "itemsJson"]
+    }
+  },
+  "firestore": {
+    "/ledgers/{ledgerId}": {
+      "schema": "LedgerMetadata",
+      "description": "Active shared financial ledger metadata"
+    },
+    "/ledgers/{ledgerId}/chunks/{chunkId}": {
+      "schema": "DataChunk",
+      "description": "Chunked records of invoices and payments"
+    }
+  }
+}

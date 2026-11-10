@@ -82,10 +82,14 @@ export const Header: React.FC<HeaderProps> = ({
               <a href="#" className="text-base font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
                 Instamart Payment Tracker
               </a>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 font-mono">
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 font-mono">
                 <span>{totalInvoices > 0 ? (vendorName || 'Active Ledger') : 'No Dataset Loaded'}</span>
                 <span aria-hidden="true">·</span>
                 <span>{totalInvoices} Invoices</span>
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Shared DB
+                </span>
               </div>
             </div>
           </div>
